@@ -174,17 +174,26 @@ def get_latest(dev_eui: str):
 def get_history(
     dev_eui: str,
     limit: int = Query(default=50, ge=1, le=500),
-    field: Optional[str] = None,
+    hours: Optional[int] = Query(default=None, ge=1, le=720),
 ):
-    """Lịch sử đo của 1 thiết bị (mặc định 50 bản ghi gần nhất)."""
+    """Lịch sử đo của 1 thiết bị. Nếu có `hours`, chỉ lấy dữ liệu trong N giờ gần nhất."""
     conn = get_conn()
     try:
-        rows = conn.execute("""
-            SELECT * FROM measurements
-            WHERE dev_eui = ?
-            ORDER BY received_at DESC
-            LIMIT ?
-        """, (dev_eui, limit)).fetchall()
+        if hours is not None:
+            rows = conn.execute("""
+                SELECT * FROM measurements
+                WHERE dev_eui = ?
+                  AND received_at >= datetime('now', ? )
+                ORDER BY received_at DESC
+                LIMIT ?
+            """, (dev_eui, f"-{hours} hours", limit)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT * FROM measurements
+                WHERE dev_eui = ?
+                ORDER BY received_at DESC
+                LIMIT ?
+            """, (dev_eui, limit)).fetchall()
 
         return [row_to_measurement(r) for r in rows]
     finally:

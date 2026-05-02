@@ -419,7 +419,7 @@ export default function DeviceDetailScreen({ route }) {
     try {
       const limit = Math.min(range.hours * 12, 500);
       const [hist, st] = await Promise.all([
-        api.getHistory(device.dev_eui, limit),
+        api.getHistory(device.dev_eui, limit, range.hours),
         api.getStats(device.dev_eui, range.hours),
       ]);
       setHistory(hist);

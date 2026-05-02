@@ -21,9 +21,9 @@ export const api = {
   // Thông số mới nhất của 1 thiết bị
   getLatest: (devEui) => fetchJSON(`/devices/${devEui}/latest`),
 
-  // Lịch sử 50 bản ghi gần nhất
-  getHistory: (devEui, limit = 50) =>
-    fetchJSON(`/devices/${devEui}/history?limit=${limit}`),
+  // Lịch sử bản ghi gần nhất, lọc theo số giờ nếu có
+  getHistory: (devEui, limit = 50, hours = null) =>
+    fetchJSON(`/devices/${devEui}/history?limit=${limit}${hours ? `&hours=${hours}` : ""}`),
 
   // Thống kê 24h
   getStats: (devEui, hours = 24) =>
