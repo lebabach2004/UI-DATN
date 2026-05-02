@@ -29,9 +29,10 @@ function batteryColor(v) {
 function timeSince(isoStr) {
   if (!isoStr) return "—";
   const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
-  if (diff < 60)  return `${Math.floor(diff)}s trước`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m trước`;
-  return `${Math.floor(diff / 3600)}h trước`;
+  if (diff < 120)   return "vừa xong";
+  if (diff < 3600)  return `${Math.floor(diff / 60)} phút trước`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+  return `${Math.floor(diff / 86400)} ngày trước`;
 }
 
 // ─── Card thiết bị ────────────────────────────────────────────

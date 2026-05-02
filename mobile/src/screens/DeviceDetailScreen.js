@@ -34,14 +34,24 @@ const RANGES = [
 ];
 
 const FIELDS = {
-  temperature: { label: "Nhiệt độ", icon: "🌡️", unit: "°C",    color: "#f59e0b", precision: 2, threshLow: 18, threshHigh: 32 },
-  humidity:    { label: "Độ ẩm",    icon: "💧", unit: "%",      color: "#4f8ef7", precision: 2, threshLow: 40, threshHigh: 80 },
-  eco2:        { label: "eCO₂",     icon: "🌿", unit: " ppm",   color: "#22c55e", precision: 0, threshLow: null, threshHigh: 1000 },
-  tvoc:        { label: "TVOC",     icon: "🧪", unit: " ppb",   color: "#a855f7", precision: 0, threshLow: null, threshHigh: 300 },
-  battery:     { label: "Pin",      icon: "🔋", unit: " V",     color: "#06b6d4", precision: 2, threshLow: 3.3,  threshHigh: null },
+  temperature: { label: "Nhiệt độ", icon: "🌡️", unit: "°C",  color: "#f59e0b", precision: 2, warnHigh: 35,   dangerHigh: 40,   warnLow: null, dangerLow: null },
+  humidity:    { label: "Độ ẩm",    icon: "💧", unit: "%",    color: "#4f8ef7", precision: 2, warnHigh: 80,   dangerHigh: 90,   warnLow: null, dangerLow: null },
+  eco2:        { label: "eCO₂",     icon: "🌿", unit: " ppm", color: "#22c55e", precision: 0, warnHigh: 1000, dangerHigh: 2000, warnLow: null, dangerLow: null },
+  tvoc:        { label: "TVOC",     icon: "🧪", unit: " ppb", color: "#a855f7", precision: 0, warnHigh: 300,  dangerHigh: 500,  warnLow: null, dangerLow: null },
+  battery:     { label: "Pin",      icon: "🔋", unit: " V",   color: "#06b6d4", precision: 2, warnHigh: null, dangerHigh: null, warnLow: 3.3,  dangerLow: 3.0  },
 };
 
 function fmt(v, p) { return v.toFixed(p); }
+
+function getStatus(value, cfg) {
+  if (cfg.dangerHigh != null && value >= cfg.dangerHigh) return "danger";
+  if (cfg.dangerLow  != null && value <= cfg.dangerLow)  return "danger";
+  if (cfg.warnHigh   != null && value >= cfg.warnHigh)   return "warn";
+  if (cfg.warnLow    != null && value <= cfg.warnLow)    return "warn";
+  return "ok";
+}
+const STATUS_COLOR = { ok: null,        warn: "#f59e0b", danger: "#ef4444" };
+const STATUS_LABEL = { ok: null, warn: "CẢNH BÁO", danger: "NGUY HIỂM" };
 
 function fmtTime(iso, hours) {
   const d = new Date(iso);
@@ -97,8 +107,11 @@ function AreaChart({ data, field, rangeHours }) {
     return { x: toX(idx), text: fmtTime(sorted[idx].received_at, rangeHours) };
   });
 
-  const thHY = cfg.threshHigh != null ? toY(cfg.threshHigh) : null;
-  const thLY = cfg.threshLow  != null ? toY(cfg.threshLow)  : null;
+  const warnHY   = cfg.warnHigh   != null ? toY(cfg.warnHigh)   : null;
+  const dangerHY = cfg.dangerHigh != null ? toY(cfg.dangerHigh) : null;
+  const warnLY   = cfg.warnLow    != null ? toY(cfg.warnLow)    : null;
+  const dangerLY = cfg.dangerLow  != null ? toY(cfg.dangerLow)  : null;
+  const inChart  = (y) => y != null && y > PAD.top && y < PAD.top + innerH;
 
   function onTouchX(touchX) {
     const ratio = (touchX - PAD.left) / innerW;
@@ -135,16 +148,25 @@ function AreaChart({ data, field, rangeHours }) {
           );
         })}
 
-        {/* Ngưỡng cao – đỏ nét đứt */}
-        {thHY != null && thHY > PAD.top && thHY < PAD.top + innerH && (
-          <SvgLine x1={PAD.left} y1={thHY} x2={PAD.left + innerW} y2={thHY}
-            stroke={C.red} strokeWidth="1.2" strokeDasharray="5,4" opacity="0.75" />
+        {/* Ngưỡng warn high – vàng */}
+        {inChart(warnHY) && (
+          <SvgLine x1={PAD.left} y1={warnHY} x2={PAD.left + innerW} y2={warnHY}
+            stroke={C.yellow} strokeWidth="1.2" strokeDasharray="5,4" opacity="0.8" />
         )}
-
-        {/* Ngưỡng thấp – cyan nét đứt */}
-        {thLY != null && thLY > PAD.top && thLY < PAD.top + innerH && (
-          <SvgLine x1={PAD.left} y1={thLY} x2={PAD.left + innerW} y2={thLY}
-            stroke={C.cyan} strokeWidth="1.2" strokeDasharray="5,4" opacity="0.75" />
+        {/* Ngưỡng danger high – đỏ */}
+        {inChart(dangerHY) && (
+          <SvgLine x1={PAD.left} y1={dangerHY} x2={PAD.left + innerW} y2={dangerHY}
+            stroke={C.red} strokeWidth="1.4" strokeDasharray="5,4" opacity="0.85" />
+        )}
+        {/* Ngưỡng warn low – vàng */}
+        {inChart(warnLY) && (
+          <SvgLine x1={PAD.left} y1={warnLY} x2={PAD.left + innerW} y2={warnLY}
+            stroke={C.yellow} strokeWidth="1.2" strokeDasharray="5,4" opacity="0.8" />
+        )}
+        {/* Ngưỡng danger low – đỏ */}
+        {inChart(dangerLY) && (
+          <SvgLine x1={PAD.left} y1={dangerLY} x2={PAD.left + innerW} y2={dangerLY}
+            stroke={C.red} strokeWidth="1.4" strokeDasharray="5,4" opacity="0.85" />
         )}
 
         {/* Area fill */}
@@ -197,16 +219,28 @@ function AreaChart({ data, field, rangeHours }) {
           <View style={[ch.lgSolid, { backgroundColor: cfg.color }]} />
           <Text style={ch.lgTxt}>{cfg.label}</Text>
         </View>
-        {cfg.threshHigh != null && (
+        {cfg.warnHigh != null && (
           <View style={ch.lgItem}>
-            <View style={[ch.lgDash, { borderColor: C.red }]} />
-            <Text style={ch.lgTxt}>Ngưỡng cao ({cfg.threshHigh}{cfg.unit})</Text>
+            <View style={[ch.lgDash, { borderColor: C.yellow }]} />
+            <Text style={ch.lgTxt}>Cảnh báo ({cfg.warnHigh}{cfg.unit})</Text>
           </View>
         )}
-        {cfg.threshLow != null && (
+        {cfg.dangerHigh != null && (
           <View style={ch.lgItem}>
-            <View style={[ch.lgDash, { borderColor: C.cyan }]} />
-            <Text style={ch.lgTxt}>Ngưỡng thấp ({cfg.threshLow}{cfg.unit})</Text>
+            <View style={[ch.lgDash, { borderColor: C.red }]} />
+            <Text style={ch.lgTxt}>Nguy hiểm ({cfg.dangerHigh}{cfg.unit})</Text>
+          </View>
+        )}
+        {cfg.warnLow != null && (
+          <View style={ch.lgItem}>
+            <View style={[ch.lgDash, { borderColor: C.yellow }]} />
+            <Text style={ch.lgTxt}>Cảnh báo ({cfg.warnLow}{cfg.unit})</Text>
+          </View>
+        )}
+        {cfg.dangerLow != null && (
+          <View style={ch.lgItem}>
+            <View style={[ch.lgDash, { borderColor: C.red }]} />
+            <Text style={ch.lgTxt}>Nguy hiểm ({cfg.dangerLow}{cfg.unit})</Text>
           </View>
         )}
       </View>
@@ -245,6 +279,10 @@ function MetricSection({ field, history, stats, rangeHours }) {
   const value  = latest?.[field] ?? 0;
   const st     = stats?.find((s) => s.field === field);
 
+  const status      = getStatus(value, cfg);
+  const statusColor = STATUS_COLOR[status];
+  const statusLabel = STATUS_LABEL[status];
+
   let minPt = null, maxPt = null;
   (history || []).forEach((d) => {
     if (d[field] == null) return;
@@ -253,20 +291,27 @@ function MetricSection({ field, history, stats, rangeHours }) {
   });
 
   const threshLabel = [
-    cfg.threshLow  != null ? `${cfg.threshLow}${cfg.unit}`  : null,
-    cfg.threshHigh != null ? `${cfg.threshHigh}${cfg.unit}` : null,
-  ].filter(Boolean).join(" – ");
+    cfg.warnHigh   != null ? `Cảnh báo: ${cfg.warnHigh}${cfg.unit}`   : null,
+    cfg.dangerHigh != null ? `Nguy hiểm: ${cfg.dangerHigh}${cfg.unit}` : null,
+    cfg.warnLow    != null ? `Cảnh báo: <${cfg.warnLow}${cfg.unit}`   : null,
+    cfg.dangerLow  != null ? `Nguy hiểm: <${cfg.dangerLow}${cfg.unit}` : null,
+  ].filter(Boolean).join("  ·  ");
 
   return (
-    <View style={ms.card}>
+    <View style={[ms.card, statusColor && { borderColor: statusColor + "55" }]}>
       <View style={ms.topRow}>
         {/* Giá trị hiện tại */}
         <View style={ms.leftCol}>
           <View style={ms.labelRow}>
             <Text style={ms.icon}>{cfg.icon}</Text>
             <Text style={ms.label}>{cfg.label}</Text>
+            {statusLabel && (
+              <View style={[ms.badge, { backgroundColor: statusColor + "22", borderColor: statusColor }]}>
+                <Text style={[ms.badgeTxt, { color: statusColor }]}>{statusLabel}</Text>
+              </View>
+            )}
           </View>
-          <Text style={[ms.bigVal, { color: cfg.color }]}>
+          <Text style={[ms.bigVal, { color: statusColor ?? cfg.color }]}>
             {fmt(value, cfg.precision)}{cfg.unit}
           </Text>
           {latest && (
@@ -330,6 +375,8 @@ const ms = StyleSheet.create({
   label:     { fontSize: 14, fontWeight: "700", color: C.text2 },
   bigVal:    { fontSize: 34, fontWeight: "800", letterSpacing: -0.5 },
   updAt:     { fontSize: 11, color: C.text3, marginTop: 5 },
+  badge:     { borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1, marginLeft: 6 },
+  badgeTxt:  { fontSize: 9, fontWeight: "800", letterSpacing: 0.6 },
   divider:   { height: 1, backgroundColor: C.border, marginVertical: 14 },
   statsGrid: { flex: 1.1, flexDirection: "row", flexWrap: "wrap", rowGap: 10, columnGap: 4 },
   stItem:    { width: "48%" },
