@@ -275,11 +275,12 @@ const ch = StyleSheet.create({
 // ─── Metric section ───────────────────────────────────────────
 function MetricSection({ field, history, stats, rangeHours }) {
   const cfg    = FIELDS[field];
-  const latest = history?.[0];
-  const value  = latest?.[field] ?? 0;
-  const st     = stats?.find((s) => s.field === field);
+  const latest  = history?.[0];
+  const value   = latest?.[field] ?? 0;
+  const hasData = latest != null && latest[field] != null;
+  const st      = stats?.find((s) => s.field === field);
 
-  const status      = getStatus(value, cfg);
+  const status      = hasData ? getStatus(value, cfg) : "ok";
   const statusColor = STATUS_COLOR[status];
   const statusLabel = STATUS_LABEL[status];
 
