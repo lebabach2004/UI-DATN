@@ -1,27 +1,18 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, ActivityIndicator, Alert,
 } from "react-native";
 import { api } from "../services/api";
-
-const C = {
-  bg:      "#07080f",
-  card:    "#0f1120",
-  border:  "#1e2235",
-  primary: "#4f8ef7",
-  green:   "#22c55e",
-  red:     "#ef4444",
-  yellow:  "#f59e0b",
-  text1:   "#f1f5f9",
-  text2:   "#94a3b8",
-  text3:   "#475569",
-};
+import { useTheme } from "../context/ThemeContext";
 
 const ROLE_LABEL = { building_admin: "Admin", user: "User" };
-const ROLE_COLOR = { building_admin: C.yellow, user: C.green };
 
 export default function AdminScreen() {
+  const { C } = useTheme();
+  const s = useMemo(() => makeStyles(C), [C]);
+  const ROLE_COLOR = { building_admin: C.yellow, user: C.green };
+
   const [users,    setUsers]    = useState([]);
   const [devices,  setDevices]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -108,7 +99,7 @@ export default function AdminScreen() {
       <View style={s.header}>
         <Text style={s.title}>Quản lý tài khoản</Text>
         <TouchableOpacity
-          style={[s.addBtn, showForm && { backgroundColor: "#1e2235" }]}
+          style={[s.addBtn, showForm && { backgroundColor: C.border }]}
           onPress={() => { setShowForm(!showForm); setFormErr(null); }}
         >
           <Text style={s.addBtnTxt}>{showForm ? "✕ Đóng" : "+ Thêm"}</Text>
@@ -145,7 +136,7 @@ export default function AdminScreen() {
             {["user", "building_admin"].map((role) => (
               <TouchableOpacity
                 key={role}
-                style={[s.roleBtn, form.role === role && { borderColor: C.primary, backgroundColor: "#4f8ef722" }]}
+                style={[s.roleBtn, form.role === role && { borderColor: C.primary, backgroundColor: C.primary + "22" }]}
                 onPress={() => setForm({ ...form, role, dev_eui: "" })}
               >
                 <Text style={[s.roleTxt, form.role === role && { color: C.primary }]}>
@@ -164,7 +155,7 @@ export default function AdminScreen() {
                   : devices.map((d) => (
                     <TouchableOpacity
                       key={d.dev_eui}
-                      style={[s.nodeItem, form.dev_eui === d.dev_eui && { borderColor: C.primary, backgroundColor: "#4f8ef722" }]}
+                      style={[s.nodeItem, form.dev_eui === d.dev_eui && { borderColor: C.primary, backgroundColor: C.primary + "22" }]}
                       onPress={() => setForm({ ...form, dev_eui: d.dev_eui })}
                     >
                       <Text style={[s.nodeName, form.dev_eui === d.dev_eui && { color: C.primary }]}>
@@ -226,41 +217,43 @@ export default function AdminScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: C.bg },
-  center:       { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" },
-  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 60, paddingBottom: 16 },
-  title:        { fontSize: 22, fontWeight: "800", color: C.text1 },
-  addBtn:       { backgroundColor: C.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
-  addBtnTxt:    { color: "#fff", fontWeight: "700", fontSize: 13 },
+function makeStyles(C) {
+  return StyleSheet.create({
+    container:    { flex: 1, backgroundColor: C.bg },
+    center:       { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" },
+    header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 60, paddingBottom: 16 },
+    title:        { fontSize: 22, fontWeight: "800", color: C.text1 },
+    addBtn:       { backgroundColor: C.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
+    addBtnTxt:    { color: "#fff", fontWeight: "700", fontSize: 13 },
 
-  card:         { marginHorizontal: 16, marginBottom: 16, backgroundColor: C.card, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: C.border },
-  sectionTitle: { fontSize: 11, fontWeight: "700", color: C.text3, letterSpacing: 1.2, marginBottom: 16 },
-  label:        { fontSize: 12, fontWeight: "600", color: C.text2, marginBottom: 8 },
-  input:        { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, color: C.text1, fontSize: 14 },
+    card:         { marginHorizontal: 16, marginBottom: 16, backgroundColor: C.card, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: C.border },
+    sectionTitle: { fontSize: 11, fontWeight: "700", color: C.text3, letterSpacing: 1.2, marginBottom: 16 },
+    label:        { fontSize: 12, fontWeight: "600", color: C.text2, marginBottom: 8 },
+    input:        { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, color: C.text1, fontSize: 14 },
 
-  roleRow:      { flexDirection: "row", gap: 10 },
-  roleBtn:      { flex: 1, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
-  roleTxt:      { color: C.text2, fontWeight: "600", fontSize: 13 },
+    roleRow:      { flexDirection: "row", gap: 10 },
+    roleBtn:      { flex: 1, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+    roleTxt:      { color: C.text2, fontWeight: "600", fontSize: 13 },
 
-  nodeList:     { gap: 8 },
-  nodeItem:     { borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  nodeName:     { color: C.text1, fontWeight: "600", fontSize: 14 },
-  nodeEui:      { color: C.text3, fontSize: 11, fontFamily: "monospace" },
-  noDevice:     { color: C.text3, fontSize: 13, textAlign: "center", paddingVertical: 10 },
+    nodeList:     { gap: 8 },
+    nodeItem:     { borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    nodeName:     { color: C.text1, fontWeight: "600", fontSize: 14 },
+    nodeEui:      { color: C.text3, fontSize: 11, fontFamily: "monospace" },
+    noDevice:     { color: C.text3, fontSize: 13, textAlign: "center", paddingVertical: 10 },
 
-  error:        { color: C.red, fontSize: 12, marginTop: 10, textAlign: "center" },
-  saveBtn:      { marginTop: 16, backgroundColor: C.primary, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
-  saveBtnTxt:   { color: "#fff", fontWeight: "700", fontSize: 15 },
+    error:        { color: C.red, fontSize: 12, marginTop: 10, textAlign: "center" },
+    saveBtn:      { marginTop: 16, backgroundColor: C.primary, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+    saveBtnTxt:   { color: "#fff", fontWeight: "700", fontSize: 15 },
 
-  listTitle:    { fontSize: 11, fontWeight: "700", color: C.text3, letterSpacing: 1.2, paddingHorizontal: 16, marginBottom: 8 },
-  userRow:      { marginHorizontal: 16, marginBottom: 8, backgroundColor: C.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border, flexDirection: "row", alignItems: "center" },
-  userLeft:     { flex: 1 },
-  userTop:      { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
-  userName:     { fontSize: 15, fontWeight: "700", color: C.text1 },
-  rolePill:     { borderWidth: 1, borderRadius: 5, paddingHorizontal: 8, paddingVertical: 2 },
-  rolePillTxt:  { fontSize: 10, fontWeight: "800" },
-  userNode:     { fontSize: 12, color: C.text3 },
-  delBtn:       { backgroundColor: "#ef444422", borderWidth: 1, borderColor: C.red, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
-  delTxt:       { color: C.red, fontWeight: "700", fontSize: 12 },
-});
+    listTitle:    { fontSize: 11, fontWeight: "700", color: C.text3, letterSpacing: 1.2, paddingHorizontal: 16, marginBottom: 8 },
+    userRow:      { marginHorizontal: 16, marginBottom: 8, backgroundColor: C.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border, flexDirection: "row", alignItems: "center" },
+    userLeft:     { flex: 1 },
+    userTop:      { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
+    userName:     { fontSize: 15, fontWeight: "700", color: C.text1 },
+    rolePill:     { borderWidth: 1, borderRadius: 5, paddingHorizontal: 8, paddingVertical: 2 },
+    rolePillTxt:  { fontSize: 10, fontWeight: "800" },
+    userNode:     { fontSize: 12, color: C.text3 },
+    delBtn:       { backgroundColor: C.red + "22", borderWidth: 1, borderColor: C.red, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+    delTxt:       { color: C.red, fontWeight: "700", fontSize: 12 },
+  });
+}

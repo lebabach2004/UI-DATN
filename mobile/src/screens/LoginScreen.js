@@ -1,22 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { api } from "../services/api";
-
-const C = {
-  bg:      "#07080f",
-  card:    "#0f1120",
-  border:  "#1e2235",
-  primary: "#4f8ef7",
-  text1:   "#f1f5f9",
-  text2:   "#94a3b8",
-  text3:   "#475569",
-  red:     "#ef4444",
-};
+import { useTheme } from "../context/ThemeContext";
 
 export default function LoginScreen({ onLogin }) {
+  const { C } = useTheme();
+  const s = useMemo(() => makeStyles(C), [C]);
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading,  setLoading]  = useState(false);
@@ -90,16 +83,18 @@ export default function LoginScreen({ onLogin }) {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  inner:     { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 },
-  logo:      { fontSize: 52, marginBottom: 12 },
-  title:     { fontSize: 26, fontWeight: "800", color: C.text1, letterSpacing: -0.5 },
-  sub:       { fontSize: 14, color: C.text2, marginTop: 6, marginBottom: 32 },
-  card:      { width: "100%", backgroundColor: C.card, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: C.border },
-  label:     { fontSize: 12, fontWeight: "600", color: C.text2, marginBottom: 8, letterSpacing: 0.5 },
-  input:     { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13, color: C.text1, fontSize: 15 },
-  error:     { color: C.red, fontSize: 13, marginTop: 12, textAlign: "center" },
-  btn:       { marginTop: 22, backgroundColor: C.primary, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
-  btnTxt:    { color: "#fff", fontWeight: "700", fontSize: 16 },
-});
+function makeStyles(C) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.bg },
+    inner:     { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 },
+    logo:      { fontSize: 52, marginBottom: 12 },
+    title:     { fontSize: 26, fontWeight: "800", color: C.text1, letterSpacing: -0.5 },
+    sub:       { fontSize: 14, color: C.text2, marginTop: 6, marginBottom: 32 },
+    card:      { width: "100%", backgroundColor: C.card, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: C.border },
+    label:     { fontSize: 12, fontWeight: "600", color: C.text2, marginBottom: 8, letterSpacing: 0.5 },
+    input:     { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13, color: C.text1, fontSize: 15 },
+    error:     { color: C.red, fontSize: 13, marginTop: 12, textAlign: "center" },
+    btn:       { marginTop: 22, backgroundColor: C.primary, borderRadius: 14, paddingVertical: 15, alignItems: "center" },
+    btnTxt:    { color: "#fff", fontWeight: "700", fontSize: 16 },
+  });
+}
