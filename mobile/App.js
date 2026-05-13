@@ -265,15 +265,7 @@ function AppContent() {
           ) : (
             <Stack.Screen
               name="MyRoom"
-              options={{
-                title: "Phòng của tôi",
-                headerRight: () => (
-                  <View style={{ flexDirection: "row" }}>
-                    {themeBtn}
-                    {userBtn}
-                  </View>
-                ),
-              }}
+              options={{ title: "Phòng của tôi" }}
             >
               {(props) => (
                 <DeviceDetailScreen
@@ -282,6 +274,9 @@ function AppContent() {
                     ...props.route,
                     params: { device: { dev_eui: user.dev_eui, device_name: user.username }, isAdmin: false },
                   }}
+                  onToggleTheme={toggleTheme}
+                  isDark={isDark}
+                  onShowUserMenu={() => setShowUserMenu(true)}
                 />
               )}
             </Stack.Screen>

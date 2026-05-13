@@ -3,6 +3,10 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   StyleSheet, ActivityIndicator, Alert,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 import { api } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
 
@@ -19,8 +23,43 @@ export default function AdminScreen() {
   const [showForm, setShowForm] = useState(false);
 
   const [form, setForm] = useState({ username: "", password: "", role: "user", dev_eui: "" });
-  const [saving,  setSaving]  = useState(false);
-  const [formErr, setFormErr] = useState(null);
+  const [saving,    setSaving]    = useState(false);
+  const [formErr,   setFormErr]   = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    try {
+      setExporting(true);
+      const token = await AsyncStorage.getItem("auth_token");
+      const url = api.exportZipUrl();
+
+      if (Platform.OS === "web") {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error(`Server lỗi ${res.status}`);
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `lorawan_all_${Date.now()}.zip`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } else {
+        const fileUri = FileSystem.documentDirectory + `lorawan_all_${Date.now()}.zip`;
+        const result = await FileSystem.downloadAsync(url, fileUri, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (result.status !== 200) throw new Error(`Server lỗi ${result.status}`);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(result.uri, { mimeType: "application/zip", dialogTitle: "Xuất dữ liệu CSV tất cả thiết bị" });
+        } else {
+          Alert.alert("Đã lưu", result.uri);
+        }
+      }
+    } catch (e) {
+      Alert.alert("Lỗi export", e.message);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const loadData = useCallback(async () => {
     try {
@@ -98,12 +137,24 @@ export default function AdminScreen() {
       {/* Header */}
       <View style={s.header}>
         <Text style={s.title}>Quản lý tài khoản</Text>
-        <TouchableOpacity
-          style={[s.addBtn, showForm && { backgroundColor: C.border }]}
-          onPress={() => { setShowForm(!showForm); setFormErr(null); }}
-        >
-          <Text style={s.addBtnTxt}>{showForm ? "✕ Đóng" : "+ Thêm"}</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            style={[s.addBtn, { backgroundColor: C.green }]}
+            onPress={handleExport}
+            disabled={exporting}
+          >
+            {exporting
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={s.addBtnTxt}>⬇ ZIP</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.addBtn, showForm && { backgroundColor: C.border }]}
+            onPress={() => { setShowForm(!showForm); setFormErr(null); }}
+          >
+            <Text style={s.addBtnTxt}>{showForm ? "✕ Đóng" : "+ Thêm"}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Form tạo user */}

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const BASE_URL  = "http://localhost:8001";
+const BASE_URL  = "http://10.40.69.24:8001";
 const TOKEN_KEY = "auth_token";
 const USER_KEY  = "auth_user";
 
@@ -68,4 +68,20 @@ export const api = {
     fetchJSON(`/devices/${devEui}/stats?hours=${hours}`),
 
   getSummary: () => fetchJSON("/summary"),
+
+  getThresholds: () => fetchJSON("/thresholds"),
+  setDeviceThresholds: (devEui, data) =>
+    fetchJSON(`/devices/${devEui}/thresholds`, { method: "PUT", body: JSON.stringify(data) }),
+
+  exportCsvUrl: (hours = null, devEui = null) => {
+    const params = [];
+    if (hours)  params.push(`hours=${hours}`);
+    if (devEui) params.push(`dev_eui=${devEui}`);
+    return `${BASE_URL}/export/csv${params.length ? "?" + params.join("&") : ""}`;
+  },
+
+  exportZipUrl: (hours = null) => {
+    const params = hours ? `?hours=${hours}` : "";
+    return `${BASE_URL}/export/zip${params}`;
+  },
 };

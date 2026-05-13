@@ -3,13 +3,18 @@ LoRaWAN FastAPI Backend
 Chạy: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 """
 
+import csv
+import io
+import json
 import sqlite3
+import zipfile
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from passlib.context import CryptContext
@@ -73,6 +78,14 @@ def get_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     return conn
 
+DEFAULT_THRESHOLDS = {
+    "temperature": {"warnHigh": 35,   "dangerHigh": 40,   "warnLow": None, "dangerLow": None},
+    "humidity":    {"warnHigh": 80,   "dangerHigh": 90,   "warnLow": None, "dangerLow": None},
+    "eco2":        {"warnHigh": 1000, "dangerHigh": 2000, "warnLow": None, "dangerLow": None},
+    "tvoc":        {"warnHigh": 300,  "dangerHigh": 500,  "warnLow": None, "dangerLow": None},
+    "battery":     {"warnHigh": None, "dangerHigh": None, "warnLow": 3.3,  "dangerLow": 3.0},
+}
+
 def init_db():
     """Tạo bảng users và tạo tài khoản admin mặc định nếu chưa có."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +98,13 @@ def init_db():
             role       TEXT NOT NULL DEFAULT 'user',
             dev_eui    TEXT,
             created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS thresholds (
+            dev_eui    TEXT PRIMARY KEY,
+            data       TEXT NOT NULL,
+            updated_at TEXT DEFAULT (datetime('now'))
         )
     """)
     conn.commit()
@@ -340,7 +360,7 @@ def get_latest(dev_eui: str, user: dict = Depends(get_current_user)):
 @app.get("/devices/{dev_eui}/history", response_model=list[Measurement])
 def get_history(
     dev_eui: str,
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=120, ge=1, le=10000),
     hours: Optional[int] = Query(default=None, ge=1, le=720),
     user: dict = Depends(get_current_user),
 ):
@@ -351,7 +371,7 @@ def get_history(
             rows = conn.execute("""
                 SELECT * FROM measurements
                 WHERE dev_eui = ?
-                  AND received_at >= datetime('now', ?)
+                  AND substr(received_at, 1, 19) >= strftime('%Y-%m-%dT%H:%M:%S', datetime('now', ?))
                 ORDER BY received_at DESC LIMIT ?
             """, (dev_eui, f"-{hours} hours", limit)).fetchall()
         else:
@@ -391,7 +411,7 @@ def get_stats(
                        MAX({field}) as max, COUNT(*) as count
                 FROM measurements
                 WHERE dev_eui = ?
-                  AND received_at >= datetime('now', '-{hours} hours')
+                  AND substr(received_at, 1, 19) >= strftime('%Y-%m-%dT%H:%M:%S', datetime('now', '-{hours} hours'))
             """, (dev_eui,)).fetchone()
             result.append({
                 "dev_eui":     dev_eui,
@@ -403,6 +423,138 @@ def get_stats(
                 "count":       row["count"] or 0,
             })
         return result
+    finally:
+        conn.close()
+
+
+@app.get("/thresholds")
+def get_thresholds(user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    try:
+        if user.get("role") == "building_admin":
+            rows = conn.execute("SELECT dev_eui, data FROM thresholds").fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT dev_eui, data FROM thresholds WHERE dev_eui = ?",
+                (user.get("dev_eui"),)
+            ).fetchall()
+        return {r["dev_eui"]: json.loads(r["data"]) for r in rows}
+    finally:
+        conn.close()
+
+
+@app.put("/devices/{dev_eui}/thresholds")
+def set_thresholds(dev_eui: str, data: dict, admin: dict = Depends(require_admin)):
+    conn = get_conn()
+    try:
+        conn.execute("""
+            INSERT INTO thresholds (dev_eui, data, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(dev_eui) DO UPDATE SET data=excluded.data, updated_at=datetime('now')
+        """, (dev_eui, json.dumps(data)))
+        conn.commit()
+        return {"message": "OK"}
+    finally:
+        conn.close()
+
+
+@app.get("/export/csv")
+def export_csv(
+    hours: Optional[int] = Query(default=None, ge=1, le=8760),
+    dev_eui: Optional[str] = Query(default=None),
+    user: dict = Depends(get_current_user),
+):
+    conn = get_conn()
+    try:
+        time_filter = f" AND substr(received_at,1,19) >= strftime('%Y-%m-%dT%H:%M:%S', datetime('now', '-{hours} hours'))" if hours else ""
+        if user.get("role") == "building_admin":
+            if dev_eui:
+                rows = conn.execute(f"""
+                    SELECT received_at, dev_eui, device_name, temperature, humidity,
+                           battery, eco2, tvoc, rssi, snr
+                    FROM measurements WHERE dev_eui = ?{time_filter}
+                    ORDER BY received_at DESC
+                """, (dev_eui,)).fetchall()
+            else:
+                rows = conn.execute(f"""
+                    SELECT received_at, dev_eui, device_name, temperature, humidity,
+                           battery, eco2, tvoc, rssi, snr
+                    FROM measurements WHERE 1=1{time_filter}
+                    ORDER BY received_at DESC
+                """).fetchall()
+        else:
+            rows = conn.execute(f"""
+                SELECT received_at, dev_eui, device_name, temperature, humidity,
+                       battery, eco2, tvoc, rssi, snr
+                FROM measurements WHERE dev_eui = ?{time_filter}
+                ORDER BY received_at DESC
+            """, (user.get("dev_eui"),)).fetchall()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["received_at", "dev_eui", "device_name", "temperature",
+                         "humidity", "battery", "eco2", "tvoc", "rssi", "snr"])
+        for r in rows:
+            writer.writerow([r["received_at"], r["dev_eui"], r["device_name"],
+                             r["temperature"], r["humidity"], r["battery"],
+                             r["eco2"], r["tvoc"], r["rssi"], r["snr"]])
+
+        filename = f"lorawan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    finally:
+        conn.close()
+
+
+@app.get("/export/zip")
+def export_zip(
+    hours: Optional[int] = Query(default=None, ge=1, le=8760),
+    user: dict = Depends(get_current_user),
+):
+    if user.get("role") != "building_admin":
+        raise HTTPException(status_code=403, detail="Chỉ admin mới được xuất ZIP")
+    conn = get_conn()
+    try:
+        time_filter = (
+            f" AND substr(received_at,1,19) >= strftime('%Y-%m-%dT%H:%M:%S', datetime('now', '-{hours} hours'))"
+            if hours else ""
+        )
+        devices = conn.execute(
+            "SELECT DISTINCT dev_eui, device_name FROM measurements ORDER BY device_name"
+        ).fetchall()
+
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for dev in devices:
+                rows = conn.execute(f"""
+                    SELECT received_at, dev_eui, device_name, temperature, humidity,
+                           battery, eco2, tvoc, rssi, snr
+                    FROM measurements WHERE dev_eui = ?{time_filter}
+                    ORDER BY received_at DESC
+                """, (dev["dev_eui"],)).fetchall()
+
+                csv_buf = io.StringIO()
+                writer = csv.writer(csv_buf)
+                writer.writerow(["received_at", "dev_eui", "device_name", "temperature",
+                                 "humidity", "battery", "eco2", "tvoc", "rssi", "snr"])
+                for r in rows:
+                    writer.writerow([r["received_at"], r["dev_eui"], r["device_name"],
+                                     r["temperature"], r["humidity"], r["battery"],
+                                     r["eco2"], r["tvoc"], r["rssi"], r["snr"]])
+
+                safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in (dev["device_name"] or dev["dev_eui"][-8:]))
+                zf.writestr(f"{safe}.csv", csv_buf.getvalue())
+
+        zip_buf.seek(0)
+        filename = f"lorawan_all_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        return StreamingResponse(
+            iter([zip_buf.read()]),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
     finally:
         conn.close()
 

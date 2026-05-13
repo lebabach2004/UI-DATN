@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const STORAGE_KEY = "custom_thresholds";
+import { api } from "../services/api";
 
 export const DEFAULT_THRESHOLDS = {
   temperature: { warnHigh: 35,   dangerHigh: 40,   warnLow: null, dangerLow: null },
@@ -12,25 +10,25 @@ export const DEFAULT_THRESHOLDS = {
 };
 
 const ThresholdContext = createContext({
-  getThresholds: () => DEFAULT_THRESHOLDS,
-  setThresholds: () => {},
-  resetThresholds: () => {},
+  getThresholds:    () => DEFAULT_THRESHOLDS,
+  setThresholds:    async () => {},
+  resetThresholds:  async () => {},
+  refreshThresholds: async () => {},
 });
 
 export function ThresholdProvider({ children }) {
-  // { [dev_eui]: { temperature: {...}, ... } }
   const [store, setStore] = useState({});
 
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) setStore(JSON.parse(raw));
-    });
+  const refreshThresholds = useCallback(async () => {
+    try {
+      const data = await api.getThresholds();
+      setStore(data || {});
+    } catch {
+      // không fetch được, dùng default
+    }
   }, []);
 
-  const save = useCallback((next) => {
-    setStore(next);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }, []);
+  useEffect(() => { refreshThresholds(); }, []);
 
   const getThresholds = useCallback((devEui) => {
     const custom = store[devEui] || {};
@@ -41,18 +39,18 @@ export function ThresholdProvider({ children }) {
     return result;
   }, [store]);
 
-  const setThresholds = useCallback((devEui, thresholds) => {
-    save({ ...store, [devEui]: thresholds });
-  }, [store, save]);
+  const setThresholds = useCallback(async (devEui, thresholds) => {
+    setStore(prev => ({ ...prev, [devEui]: thresholds }));
+    await api.setDeviceThresholds(devEui, thresholds);
+  }, []);
 
-  const resetThresholds = useCallback((devEui) => {
-    const next = { ...store };
-    delete next[devEui];
-    save(next);
-  }, [store, save]);
+  const resetThresholds = useCallback(async (devEui) => {
+    setStore(prev => ({ ...prev, [devEui]: DEFAULT_THRESHOLDS }));
+    await api.setDeviceThresholds(devEui, DEFAULT_THRESHOLDS);
+  }, []);
 
   return (
-    <ThresholdContext.Provider value={{ getThresholds, setThresholds, resetThresholds }}>
+    <ThresholdContext.Provider value={{ getThresholds, setThresholds, resetThresholds, refreshThresholds }}>
       {children}
     </ThresholdContext.Provider>
   );

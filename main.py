@@ -17,7 +17,7 @@ CSV_PATH = DATA_DIR / "measurements.csv"
 LOG_PATH = BASE_DIR / "lorawan_collector.log"
 
 # ─────────────────────────── MQTT ─────────────────────────────
-SERVER_ADDRESS = "localhost"
+SERVER_ADDRESS = "192.168.58.103"
 SERVER_PORT    = 1883
 CLIENT_ID      = "lorawan_collector_python"
 TOPIC          = "application/+/device/+/event/up"
@@ -127,7 +127,7 @@ def parse_uplink(payload: str) -> Optional[Measurement]:
         def fill_metrics(obj: dict):
             m.temperature = _float(obj, "temperature")
             m.humidity    = _float(obj, "humidity")
-            m.battery     = _float(obj, "battery")
+            m.battery     = _float(obj, "battery") or _float(obj, "vpin")
             m.eco2        = _float(obj, "eco2")
             m.tvoc        = _float(obj, "tvoc")
  
@@ -328,7 +328,11 @@ class LoRaWANCollector:
     def __init__(self, db: Database, csv: CsvWriter):
         self._db  = db
         self._csv = csv
-        self._client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv311)
+        self._client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2,
+            client_id=CLIENT_ID,
+            protocol=mqtt.MQTTv311,
+        )
  
         if MQTT_USERNAME:
             self._client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
@@ -343,16 +347,16 @@ class LoRaWANCollector:
         self._client.loop_forever()   # blocking; handles reconnect internally
  
     # ── MQTT callbacks ────────────────────────────────────────
-    def _on_connect(self, client, userdata, flags, rc):
-        if rc == 0:
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
             logger.info("MQTT connected. Subscribing to: %s", TOPIC)
             client.subscribe(TOPIC, qos=0)
         else:
-            logger.error("MQTT connection failed, rc=%d", rc)
- 
-    def _on_disconnect(self, client, userdata, rc):
-        if rc != 0:
-            logger.warning("MQTT connection lost (rc=%d). Will auto-reconnect …", rc)
+            logger.error("MQTT connection failed, rc=%s", reason_code)
+
+    def _on_disconnect(self, client, userdata, flags, reason_code, properties):
+        if reason_code != 0:
+            logger.warning("MQTT connection lost (rc=%s). Will auto-reconnect …", reason_code)
  
     def _on_message(self, client, userdata, msg):
         logger.debug("Message arrived on topic %s", msg.topic)

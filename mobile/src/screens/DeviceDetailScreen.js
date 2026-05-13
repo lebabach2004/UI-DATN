@@ -4,6 +4,10 @@ import {
   StyleSheet, ActivityIndicator, Dimensions,
   Modal, TextInput, Alert,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 import Svg, {
   Path, Defs, LinearGradient as SvgGrad, Stop,
   Line as SvgLine, Text as SvgText, Circle,
@@ -556,7 +560,7 @@ function makeRadioStyles(C) {
 }
 
 // ─── Main screen ──────────────────────────────────────────────
-export default function DeviceDetailScreen({ route, navigation }) {
+export default function DeviceDetailScreen({ route, navigation, onShowUserMenu, onToggleTheme, isDark }) {
   const { C } = useTheme();
   const s = useMemo(() => makeStyles(C), [C]);
   const { getThresholds } = useThreshold();
@@ -570,25 +574,89 @@ export default function DeviceDetailScreen({ route, navigation }) {
   const [loading,            setLoading]            = useState(true);
   const [error,              setError]              = useState(null);
   const [showThresholdModal, setShowThresholdModal] = useState(false);
+  const [exporting,          setExporting]          = useState(false);
 
-  // Nút ⚙️ chỉ hiện cho admin
+  async function handleExport() {
+    try {
+      setExporting(true);
+      const token = await AsyncStorage.getItem("auth_token");
+      const url = api.exportCsvUrl(null, device.dev_eui);
+
+      if (Platform.OS === "web") {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error(`Server lỗi ${res.status}`);
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${device.device_name || device.dev_eui.slice(-6)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } else {
+        const safeName = (device.device_name || device.dev_eui.slice(-6)).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const fileUri = FileSystem.documentDirectory + `${safeName}.csv`;
+        const result = await FileSystem.downloadAsync(url, fileUri, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (result.status !== 200) throw new Error(`Server lỗi ${result.status}`);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(result.uri, { mimeType: "text/csv", dialogTitle: "Xuất dữ liệu CSV" });
+        } else {
+          Alert.alert("Đã lưu", result.uri);
+        }
+      }
+    } catch (e) {
+      Alert.alert("Lỗi", "Không thể xuất CSV: " + e.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   useLayoutEffect(() => {
-    if (!isAdmin) return;
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity
-          onPress={() => setShowThresholdModal(true)}
-          style={{ backgroundColor: C.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
-        >
-          <Text style={{ color: C.text2, fontSize: 13, fontWeight: "600" }}>⚙️ Ngưỡng</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            onPress={handleExport}
+            disabled={exporting}
+            style={{ backgroundColor: C.green + "33", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+          >
+            {exporting
+              ? <ActivityIndicator size="small" color={C.green} />
+              : <Text style={{ color: C.green, fontSize: 13, fontWeight: "600" }}>⬇ CSV</Text>
+            }
+          </TouchableOpacity>
+          {isAdmin && (
+            <TouchableOpacity
+              onPress={() => setShowThresholdModal(true)}
+              style={{ backgroundColor: C.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+            >
+              <Text style={{ color: C.text2, fontSize: 13, fontWeight: "600" }}>⚙️ Ngưỡng</Text>
+            </TouchableOpacity>
+          )}
+          {onToggleTheme && (
+            <TouchableOpacity
+              onPress={onToggleTheme}
+              style={{ backgroundColor: C.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+            >
+              <Text style={{ color: C.text2, fontSize: 13, fontWeight: "600" }}>{isDark ? "☀️" : "🌙"}</Text>
+            </TouchableOpacity>
+          )}
+          {onShowUserMenu && (
+            <TouchableOpacity
+              onPress={onShowUserMenu}
+              style={{ backgroundColor: C.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+            >
+              <Text style={{ color: C.text2, fontSize: 13, fontWeight: "600" }}>👤</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       ),
     });
-  }, [navigation, C, isAdmin]);
+  }, [navigation, C, isAdmin, exporting, onShowUserMenu, onToggleTheme, isDark]);
 
   const load = useCallback(async () => {
     try {
-      const limit = Math.min(range.hours * 12, 500);
+      const limit = Math.min(range.hours * 120, 10000);
       const [hist, st] = await Promise.all([
         api.getHistory(device.dev_eui, limit, range.hours),
         api.getStats(device.dev_eui, range.hours),
